@@ -1,0 +1,3 @@
+
+rootProject.name = "QiyuVR_NativeActivity_fmod"
+include ':app'

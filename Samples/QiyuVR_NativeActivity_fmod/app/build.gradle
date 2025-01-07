@@ -1,0 +1,138 @@
+plugins {
+    id 'com.android.application'
+}
+
+project.ext.QiyuNativeSDK   = '../../../QiyuNativeSDK/Lib'
+def fmod_api_root=project.file('../../3rdParty/fmodstudioapi20205android/api').absolutePath
+
+android {
+    ndkVersion "21.4.7075529"//NOTE! set here instead of set in local.properties which is deprecated.
+
+    compileSdk 29
+
+    defaultConfig {
+        applicationId "com.iqiyi.qiyuvr_nativeactivity_fmod"
+        
+        minSdk 26
+        targetSdk 29
+
+        versionCode 1
+        versionName "1.0"
+
+        setProperty("archivesBaseName", "qiyuvr_nativeactivity_fmod")
+        manifestPlaceholders = ["orientation" : "landscape"]
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk.abiFilters 'arm64-v8a'
+        ndk.stl "stlport_static"
+    }
+    
+    lintOptions {
+        abortOnError false
+        disable 'GoogleAppIndexingWarning'
+    }
+
+    repositories {
+        google()
+        mavenCentral()
+        jcenter() // Warning: this repository is going to shut down soon
+
+        flatDir {
+            dirs project.ext.QiyuNativeSDK
+        }
+    }
+    
+    signingConfigs{
+        release {
+            storeFile file("fmod-na.jks")
+            storePassword "ffffff"
+            keyAlias "fmod"
+            keyPassword "ffffff"
+        }
+     }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            
+            buildConfigField("String[]", "FMOD_LIBS", "{ \"fmod\" }")
+            externalNativeBuild {
+                ndkBuild {
+                    arguments 'FMOD_API_ROOT=' + fmod_api_root,
+                        'FMOD_LIB_SUFFIX='
+                }
+            }
+        }
+        debug {
+            debuggable = true
+            jniDebuggable = true
+
+            buildConfigField("String[]", "FMOD_LIBS", "{ \"fmodL\" }")
+            externalNativeBuild {
+                ndkBuild {
+                    arguments 'FMOD_API_ROOT=' + fmod_api_root,
+                        'FMOD_LIB_SUFFIX=L'
+                }
+            }            
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            // Application.mk in the same directory will be used automatically
+            path 'jni/Android.mk'
+        }
+    }
+        
+    packagingOptions {
+        //resources.excludes.add("META-INF/*")
+        jniLibs.useLegacyPackaging = true//PackagingOptions.jniLibs.useLegacyPackaging should be set to true because android:extractNativeLibs is set to "true" in AndroidManifest.xml.
+    }
+}
+
+dependencies {
+    debugImplementation(name: 'sxrApi-v8a-debug', ext: 'aar')
+    releaseImplementation(name: 'sxrApi-v8a-release', ext: 'aar')
+
+    debugImplementation(name: 'qiyivrsdkcore-v8a-debug', ext: 'aar')
+    releaseImplementation(name: 'qiyivrsdkcore-v8a-release', ext: 'aar')
+
+    debugImplementation(name: 'qiyuapi-v8a-debug', ext: 'aar')
+    releaseImplementation(name: 'qiyuapi-v8a-release', ext: 'aar')
+
+    testImplementation 'junit:junit:4.+'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+
+    implementation files(fmod_api_root + '/core/lib/fmod.jar')
+}
+
+//! all .so are in .QiyuNativeSDK
+android.buildTypes.all { theBuildType ->
+    task ("extractSxrSo${theBuildType.name}") {
+        tasks.whenTaskAdded { task ->
+            if( task.name.startsWith("externalNativeBuild") && task.name.endsWith(theBuildType.name.substring(1))) {
+                task.dependsOn 'extractSxrSo' + theBuildType.name
+            }
+        }
+        doLast {
+            copy {
+                from zipTree(project.ext.QiyuNativeSDK + "/sxrApi-v8a-" + theBuildType.name + ".aar")
+                into ".QiyuNativeSDK/" + theBuildType.name
+                include "jni/**/*.so"
+            }
+            copy {
+                from zipTree(project.ext.QiyuNativeSDK + "/qiyivrsdkcore-v8a-" + theBuildType.name + ".aar")
+                into ".QiyuNativeSDK/" + theBuildType.name
+                include "jni/**/*.so"
+            }
+            copy {
+                from zipTree(project.ext.QiyuNativeSDK + "/qiyuapi-v8a-" + theBuildType.name + ".aar")
+                into ".QiyuNativeSDK/" + theBuildType.name
+                include "jni/**/*.so"
+            }
+        }
+    }
+}
